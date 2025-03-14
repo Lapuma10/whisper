@@ -1,3 +1,9 @@
+# Run this
+
+source venv/bin/activate
+
+
+
 # Whisper
 
 [[Blog]](https://openai.com/blog/whisper)
