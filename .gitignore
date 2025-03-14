@@ -1,11 +1,69 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-*.egg-info
-.pytest_cache
-.ipynb_checkpoints
 
-thumbs.db
+# Virtual environment
+venv/
+.env/
+.venv/
+env/
+ENV/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Logs and debugging
+*.log
+*.out
+*.err
+logs/
+debug.log
+
+# macOS system files
 .DS_Store
-.idea
 
+# Windows system files
+Thumbs.db
+
+# Python cache
+*.egg-info/
+*.egg
+*.pyo
+
+# Pipenv and Poetry virtual environments
+Pipfile
+Pipfile.lock
+poetry.lock
+
+# Pytest cache
+.pytest_cache/
+
+# MyPy cache
+.mypy_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+*.cover
+coverage.xml
+
+# Build files
+build/
+dist/
+*.egg-info/
+MANIFEST
+
+# Docker
+*.dockerignore
+
+# Environment variables
+.env
+*.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# VSCode
+.vscode/
