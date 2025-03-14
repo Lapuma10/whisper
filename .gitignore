@@ -67,3 +67,5 @@ MANIFEST
 
 # VSCode
 .vscode/
+/.venv
+
