@@ -93,3 +93,12 @@ pip install --upgrade torch torchvision torchaudio
 ## License
 This project is licensed under the MIT License.
 
+
+
+## THe only thign that worked for me:
+ ```
+pyinstaller --onefile --windowed --name "WhisperTranscriber" \
+    --hidden-import=whisper \
+    --add-data="/Users/lilbee/Documents/GitHub/whisper/whisper/assets:whisper/assets" \
+    transcriber_app.py
+  ```
