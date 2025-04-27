@@ -4,6 +4,7 @@ import subprocess
 import whisper
 import os
 import sys
+import threading
 from whisper.utils import get_writer
 import logging
 
@@ -17,11 +18,13 @@ logging.basicConfig(
 class TranscriberApp:
     def __init__(self):
         self.window = tk.Tk()
-        self.window.title("Whisper Transcriber")
+        self.window.title("Norwegian Whisper Transcriber")
         self.window.geometry("600x400")
         
         self.model = None
         self.current_output_file = None
+        self.processing_thread = None
+        self.canceled = False
         
         # Set up paths
         if getattr(sys, 'frozen', False):
@@ -42,107 +45,220 @@ class TranscriberApp:
         self.setup_gui()
     
     def setup_gui(self):
+        # Main frame with padding
+        main_frame = tk.Frame(self.window, padx=20, pady=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        title_label = tk.Label(
+            main_frame,
+            text="Norwegian Audio Transcriber",
+            font=("Helvetica", 16)
+        )
+        title_label.pack(pady=(0, 20))
+        
         # Upload Button
         self.upload_button = tk.Button(
-            self.window, 
-            text="Select a Video", 
-            command=self.upload_video
+            main_frame, 
+            text="Select Audio/Video File",
+            font=("Helvetica", 12),
+            command=self.upload_video,
+            width=20,
+            height=2
         )
-        self.upload_button.pack(pady=20)
+        self.upload_button.pack(pady=15)
         
         # Progress Bar
-        self.progress = tk.DoubleVar(value=0)
+        self.progress_var = tk.DoubleVar(value=0)
         self.progress_bar = ttk.Progressbar(
-            self.window, 
-            variable=self.progress, 
-            maximum=100
+            main_frame,
+            variable=self.progress_var,
+            length=500,
+            maximum=100,
+            mode='determinate'
         )
-        self.progress_bar.pack(pady=20)
+        self.progress_bar.pack(pady=15, fill=tk.X)
         
-        # Result Label
-        self.result_label = tk.Label(
-            self.window, 
-            text="Select a video to transcribe.", 
-            wraplength=500
+        # Status Label
+        self.status_var = tk.StringVar(value="Ready to transcribe")
+        self.status_label = tk.Label(
+            main_frame,
+            textvariable=self.status_var,
+            wraplength=550,
+            justify=tk.LEFT,
+            font=("Helvetica", 10)
         )
-        self.result_label.pack(pady=10)
+        self.status_label.pack(pady=10, fill=tk.X)
+        
+        # Button Frame
+        button_frame = tk.Frame(main_frame)
+        button_frame.pack(pady=15)
+        
+        # Cancel Button
+        self.cancel_button = tk.Button(
+            button_frame,
+            text="Cancel",
+            font=("Helvetica", 10),
+            command=self.cancel_processing,
+            state="disabled",
+            width=12
+        )
+        self.cancel_button.pack(side=tk.LEFT, padx=10)
         
         # Open Location Button
         self.open_file_button = tk.Button(
-            self.window, 
-            text="Open Transcription Location", 
+            button_frame,
+            text="Open Transcription",
+            font=("Helvetica", 10),
+            command=self.open_current_file_location,
             state="disabled",
-            command=self.open_current_file_location
+            width=18
         )
-        self.open_file_button.pack(pady=20)
+        self.open_file_button.pack(side=tk.LEFT, padx=10)
     
     def update_status(self, message):
-        """Update status label and log message"""
-        self.result_label.config(text=message)
+        """Update status label safely from any thread"""
+        def _update():
+            self.status_var.set(message)
+            self.window.update_idletasks()  # Force update
+        
+        # Schedule the update on the main thread
+        self.window.after(0, _update)
         logging.info(message)
-        self.window.update()
     
     def update_progress(self, value):
-        """Update progress bar"""
-        self.progress.set(value)
-        self.window.update()
-        logging.info(f"Progress: {value}%")
+        """Update progress bar safely from any thread"""
+        def _update():
+            self.progress_var.set(value)
+            self.window.update_idletasks()  # Force update
+            logging.info(f"Progress updated to {value}%")
+        
+        # Schedule the update on the main thread
+        self.window.after(0, _update)
+
+    def update_button_states(self, upload_state="normal", cancel_state="disabled", open_state="disabled"):
+        """Update all button states safely from any thread"""
+        def _update():
+            self.upload_button.config(state=upload_state)
+            self.cancel_button.config(state=cancel_state)
+            self.open_file_button.config(state=open_state)
+            self.window.update_idletasks()  # Force update
+        
+        # Schedule the update on the main thread
+        self.window.after(0, _update)
+    
+    def cancel_processing(self):
+        """Cancel the current processing operation"""
+        if messagebox.askyesno("Cancel", "Are you sure you want to cancel the transcription?"):
+            self.canceled = True
+            self.update_status("Canceling transcription...")
     
     def upload_video(self):
         """Handle video selection and processing"""
         video_file = filedialog.askopenfilename(
-            filetypes=[("Video/Audio Files", "*.mov *.mp4 *.m4a *.mp3 *.wav")]
+            title="Select Audio/Video File",
+            filetypes=[
+                ("Audio/Video Files", "*.mov *.mp4 *.m4a *.mp3 *.wav *.avi *.mkv"),
+                ("All Files", "*.*")
+            ]
         )
         if not video_file:
             return
-            
-        self.update_status(f"Selected file: {video_file}")
-        self.update_status("Processing video...")
-        self.progress.set(0)
-        self.open_file_button.config(state="disabled")
         
-        try:
-            self.process_video(video_file)
-        except Exception as e:
-            self.update_status(f"Error: {str(e)}")
-            messagebox.showerror("Error", str(e))
+        # Reset UI state
+        self.canceled = False
+        self.update_progress(0)
+        self.update_status(f"Processing: {os.path.basename(video_file)}...")
+        self.update_button_states(upload_state="disabled", cancel_state="normal", open_state="disabled")
+        
+        # Start the transcription thread
+        self.processing_thread = threading.Thread(
+            target=self.process_video_thread,
+            args=(video_file,),
+            daemon=True
+        )
+        self.processing_thread.start()
+        
+        # Check thread status periodically
+        self.window.after(100, self.check_progress)
     
-    def process_video(self, video_file):
-        """Process video without threading"""
-        # Load model
-        if not self.model:
-            self.update_status("Loading Whisper model (large-v3)...")
-            self.model = whisper.load_model("large-v3")
-            self.update_status("Large-v3 model loaded successfully")
-        
-        # Set up output file
-        base_filename = os.path.splitext(os.path.basename(video_file))[0] + ".srt"
-        output_srt = self.get_unique_filename(os.path.join(self.desktop_path, base_filename))
-        self.current_output_file = output_srt
-        
-        # Extract audio
-        self.update_status("Extracting audio...")
-        self.update_progress(10)
-        self.extract_and_split_audio(video_file)
-        
-        # Transcribe
-        self.update_status("Transcribing...")
-        srt_files = self.transcribe_audio_segments()
-        
-        if srt_files:
+    def check_progress(self):
+        """Check if the processing thread is still running"""
+        if self.processing_thread and self.processing_thread.is_alive():
+            # Still running, check again soon
+            self.window.update_idletasks()  # Force UI updates
+            self.window.after(100, self.check_progress)
+        else:
+            # Thread has finished or was canceled
+            if self.canceled:
+                self.update_status("Transcription canceled.")
+                self.update_button_states(upload_state="normal", cancel_state="disabled", open_state="disabled")
+            elif self.current_output_file and os.path.exists(self.current_output_file):
+                self.update_status("Transcription complete!")
+                self.update_button_states(upload_state="normal", cancel_state="disabled", open_state="normal")
+            else:
+                # This shouldn't happen if everything went well
+                self.update_status("Transcription failed or no output file was created.")
+                self.update_button_states(upload_state="normal", cancel_state="disabled", open_state="disabled")
+    
+    def process_video_thread(self, video_file):
+        """Process video in a separate thread"""
+        try:
+            # Load model
+            if not self.model:
+                self.update_status("Loading Whisper model (large-v3)...")
+                self.update_progress(5)
+                self.model = whisper.load_model("large-v3")
+                self.update_status("Large-v3 model loaded successfully")
+                self.window.after(0, lambda: self.window.update_idletasks())  # Force UI update
+            
+            if self.canceled:
+                return
+            
+            # Set up output file
+            base_filename = os.path.splitext(os.path.basename(video_file))[0] + ".srt"
+            output_srt = self.get_unique_filename(os.path.join(self.desktop_path, base_filename))
+            self.current_output_file = output_srt
+            
+            # Extract audio
+            self.update_status("Extracting audio...")
+            self.update_progress(10)
+            self.window.after(0, lambda: self.window.update_idletasks())  # Force UI update
+            
+            if self.canceled:
+                return
+                
+            self.extract_and_split_audio(video_file)
+            
+            if self.canceled:
+                return
+                
+            # Transcribe
+            self.update_status("Transcribing audio...")
+            self.update_progress(20)
+            self.window.after(0, lambda: self.window.update_idletasks())  # Force UI update
+            srt_files = self.transcribe_audio_segments()
+            
+            if self.canceled or not srt_files:
+                return
+                
             self.update_status("Combining subtitles...")
+            self.update_progress(90)
+            self.window.after(0, lambda: self.window.update_idletasks())  # Force UI update
             self.combine_srt_files(srt_files, output_srt)
             
             # Verify the output file exists
             if os.path.exists(output_srt):
-                self.update_status(f"Output file created: {output_srt}")
+                self.update_status(f"Transcription saved: {os.path.basename(output_srt)}")
                 self.update_progress(100)
-                self.update_status("Transcription complete!")
-                self.open_file_button.config(state="normal")
+                self.window.after(0, lambda: self.window.update_idletasks())  # Force UI update
             else:
                 self.update_status("Error: Output file was not created")
-        else:
-            self.update_status("Transcription failed.")
+        
+        except Exception as e:
+            logging.error(f"Error during processing: {e}")
+            self.update_status(f"Error: {str(e)}")
+            self.window.after(0, lambda: messagebox.showerror("Error", str(e)))
     
     def extract_and_split_audio(self, video_file, output_audio_template="segment_%03d.wav", segment_length=600):
         """Extract and split audio from video"""
@@ -183,8 +299,16 @@ class TranscriberApp:
         srt_files = []
         
         for i, segment in enumerate(segment_files):
+            if self.canceled:
+                return []
+                
             try:
-                logging.info(f"Transcribing segment {i+1}/{len(segment_files)}: {segment}")
+                # Calculate progress (20-90% range for transcription)
+                progress = 20 + ((i + 1) / len(segment_files) * 70)
+                self.update_progress(int(progress))  # Convert to integer for cleaner logging
+                self.update_status(f"Transcribing segment {i+1}/{len(segment_files)}")
+                self.window.after(0, lambda: self.window.update_idletasks())  # Force UI update
+                
                 # Always use Norwegian language
                 result = self.model.transcribe(segment, language="no", task="transcribe", word_timestamps=True)
                 
@@ -193,7 +317,6 @@ class TranscriberApp:
                 srt_writer(result, segment, {"max_words_per_line": 6})
                 srt_files.append(segment_srt_file)
                 
-                self.update_progress(50 + (i + 1) / len(segment_files) * 40)
             except Exception as e:
                 logging.error(f"Error transcribing segment {segment}: {e}")
                 continue
@@ -216,6 +339,14 @@ class TranscriberApp:
                 logging.info(f"Removed temporary file: {srt_file}")
             except OSError as e:
                 logging.warning(f"Could not remove temporary file {srt_file}: {e}")
+        
+        # Also clean up WAV files
+        for wav_file in [f for f in os.listdir() if f.startswith("segment_") and f.endswith(".wav")]:
+            try:
+                os.remove(wav_file)
+                logging.info(f"Removed temporary file: {wav_file}")
+            except OSError as e:
+                logging.warning(f"Could not remove temporary file {wav_file}: {e}")
     
     def get_unique_filename(self, base_path):
         """Get a unique filename by appending a counter if file exists"""
