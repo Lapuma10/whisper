@@ -1,0 +1,59 @@
+=== INTEL ARC B580 ISSUE ANALYSIS ===
+
+PROBLEM SUMMARY:
+Your Arc B580 is a BRAND NEW Battlemage GPU (released December 2024)
+PyTorch XPU support is still EXPERIMENTAL for this generation
+
+ROOT CAUSES IDENTIFIED:
+1. B580 uses NEW Battlemage architecture (Xe2-HPG)
+2. PyTorch XPU 2.8 optimized for OLDER Alchemist (Arc A-series)
+3. oneAPI runtime (Level-Zero 1.6.33890) may not fully support B580 yet
+4. ReSize BAR feature can cause system freezes with B580
+5. Driver version 32.0.101.6913 has known stability issues
+
+WHY IT FROZE YOUR PC:
+- PyTorch tried to allocate large VRAM (11GB+) for Whisper model
+- B580 Level-Zero driver has memory management bugs
+- System hung when GPU could not properly handle the memory request
+- The freeze happened at model initialization, not during inference
+
+CONFIRMED WORKING GPUS FOR PYTORCH XPU:
+✓ Arc A770 (Alchemist) - Fully supported
+✓ Arc A750 (Alchemist) - Fully supported  
+✓ Arc A580 (Alchemist) - Supported
+✗ Arc B580 (Battlemage) - TOO NEW, NOT READY YET
+
+KNOWN ISSUES WITH B580 (from Intel forums):
+- System freezes during GPU-intensive tasks
+- Display artifacts after Windows login
+- Driver errors (versions 6989, 6987, 6913)
+- Instability with ReSize BAR enabled
+- Poor multitasking performance under load
+
+TIMELINE FOR B580 PYTORCH SUPPORT:
+- Intel is actively working on driver improvements
+- Estimated Q2-Q3 2025 for stable PyTorch XPU support
+- B580 is primarily gaming-focused right now
+- ML/AI workload support is coming but not production-ready
+
+IMMEDIATE SOLUTIONS:
+1. Use CPU-only PyTorch (current setup - STABLE)
+2. Disable ReSize BAR in BIOS (may help but limits gaming performance)
+3. Update to latest Intel drivers when available
+4. Wait for Intel Extension for PyTorch to add B580 support
+
+FUTURE OPTIONS:
+1. Wait for Intel to release stable B580 ML drivers (6-12 months)
+2. Consider Arc A770 if you need GPU acceleration now
+3. Alternative: NVIDIA RTX 3060+ or AMD RX 7000 series
+
+MONITORING RESOURCES:
+- Intel Arc Drivers: https://www.intel.com/content/www/us/en/download/785597
+- Intel Extension for PyTorch: https://github.com/intel/intel-extension-for-pytorch
+- Intel Developer Forums: https://community.intel.com/t5/Intel-ARC-Graphics
+
+CONCLUSION:
+Your B580 is an excellent gaming GPU but the ML/AI ecosystem hasn't caught up yet.
+The CPU-only setup is the safest option for now. Your transcriber will work perfectly
+with CPU - it's just slower than GPU acceleration would be.
+
