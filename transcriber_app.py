@@ -314,7 +314,7 @@ class TranscriberApp:
                 
                 segment_srt_file = f"segment_{i:03d}.srt"
                 srt_writer = get_writer("srt", ".")
-                srt_writer(result, segment, {"max_words_per_line": 6})
+                srt_writer(result, segment, {"max_words_per_line": 2})
                 srt_files.append(segment_srt_file)
                 
             except Exception as e:
