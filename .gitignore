@@ -68,4 +68,11 @@ MANIFEST
 # VSCode
 .vscode/
 /.venv
-/.venv
+
+# Large bundled files (download separately for deployment)
+whisper/assets/*.pt
+ffmpeg
+*.zip
+
+# Temporary test files
+segment_*.wav
